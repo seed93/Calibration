@@ -1,13 +1,33 @@
+#common files
+*.jpg
+*.svn-base
+Debug/
+Release/
+.svn/
+
 # Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
+*.ipch
+*.pdb
+*.exp
+*.suo
+*.opensdf
+*.sdf
+
+# image files
+*.jpg
+*.png
+*.tiff
+*.ply
+*.yml
 
 # Compiled Dynamic libraries
 *.so
 *.dylib
-*.dll
+#*.dll
 
 # Fortran module files
 *.mod
@@ -16,7 +36,7 @@
 *.lai
 *.la
 *.a
-*.lib
+#*.lib
 
 # Executables
 *.exe
