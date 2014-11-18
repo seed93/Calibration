@@ -80,6 +80,8 @@ CCalibBall::CCalibBall(char config_name[])
 	
 	fp["radii"]>>radii;
 	fp["DF"]>>DF;
+	fp["init_cx"]>>init_cx;
+	fp["init_cy"]>>init_cy;
 	fp["initfc"]>>focal_length;
 }
 
@@ -92,21 +94,22 @@ void CCalibBall::run(char config_name[])
 		printf("cannot open file %s\n", config_name);
 		return ;
 	}
-	vector< Mat > current_cameraMatrix(cam_used_num);
+	vector< Mat > cameraMatrix(cam_used_num),distCoeffs(cam_used_num);
 	for (int i=0; i<cam_used_num; i++)
 	{
-		current_cameraMatrix[i] = Mat::zeros(3,3,CV_64FC1);
-		current_cameraMatrix[i].at<double>(0,2) = init_cx;
-		current_cameraMatrix[i].at<double>(1,2) = init_cy;
-		current_cameraMatrix[i].at<double>(0,0) = focal_length[cam_list[i]];
-		current_cameraMatrix[i].at<double>(1,1) = focal_length[cam_list[i]];
+		cameraMatrix[i] = Mat::zeros(3,3,CV_64FC1);
+		cameraMatrix[i].at<double>(0,2) = init_cx;
+		cameraMatrix[i].at<double>(1,2) = init_cy;
+		cameraMatrix[i].at<double>(0,0) = focal_length[cam_list[i]];
+		cameraMatrix[i].at<double>(1,1) = focal_length[cam_list[i]];
+		cameraMatrix[i].at<double>(2,2) = 1;
+		distCoeffs[i] = Mat::zeros(5,1,CV_64FC1);
 	}
 	NPoints = 0;
-	size_t total_size = cam_used_num*imagelist_vector.size();
 	vector<Point3d> points;
-	vector<vector<Point2d>> imagePoints(total_size);
-	vector<vector<int>> visibility(total_size);
-	vector<Mat> R(total_size), T(total_size);
+	vector<vector<Point2d>> imagePoints(cam_used_num);
+	vector<vector<int>> visibility(cam_used_num);
+	vector<Mat> R(cam_used_num), T(cam_used_num);
 	for (int iv=0; iv<imagelist_vector.size(); iv++)
 	{
 		vector<string> current_imagelist(cam_used_num);
@@ -114,27 +117,19 @@ void CCalibBall::run(char config_name[])
 		vector<Point3d> current_points;
 		vector<vector<Point2d>> current_imagePoints(cam_used_num);
 		vector<vector<int>> current_visibility(cam_used_num);
-		vector<Mat> current_R(cam_used_num), current_T(cam_used_num);
-		NPoints += run_once(current_imagelist, current_points, current_imagePoints, current_visibility, current_R, current_T, current_cameraMatrix);
+		NPoints += run_once(current_imagelist, current_points, current_imagePoints, current_visibility, R, T, cameraMatrix);
 		for (int i=0; i<cam_used_num; i++)
 		{
-			imagePoints	[i+iv*cam_used_num] = current_imagePoints[i];
-			visibility		[i+iv*cam_used_num] = current_visibility[i];
-			R				[i+iv*cam_used_num] = current_R[i];
-			T				[i+iv*cam_used_num] = current_T[i];
+			size_t current_npoints = current_points.size();
+			for (int j=0; j<current_npoints; j++)
+			{
+				imagePoints[i].push_back(current_imagePoints[i][j]);
+				visibility[i].push_back(current_visibility[i][j]);
+			}
 		}
 		for (int i=0; i<current_points.size(); i++)
-		{
 			points.push_back(current_points[i]);
-		}
 	}
-	vector< Mat > cameraMatrix(total_size), distCoeffs(total_size);
-	for (int i=0; i<total_size; i++)
-	{
-		cameraMatrix[i] = current_cameraMatrix[i%cam_used_num].clone();
-		distCoeffs[i] = Mat::zeros(5,1,CV_64FC1);
-	}
-
 	cvsba::Sba sba;
 	cvsba::Sba::Params params ;
 	params.type = cvsba::Sba::MOTIONSTRUCTURE;
@@ -144,17 +139,9 @@ void CCalibBall::run(char config_name[])
 	params.fixedDistortion = 5;
 	params.verbose = 0;
 	sba.setParams(params);
-// 	for (int i=0; i<NPoints; i++)
-// 		printf("%f %f %f\n", points[i].x, points[i].y, points[i].z);
 	sba.run(points, imagePoints, visibility, cameraMatrix, R, T, distCoeffs);
 	cout<<"Optimization. Initial error="<<sba.getInitialReprjError()<<" and Final error="<<sba.getFinalReprjError()<<std::endl;
 	ScaleToWorld(points,T);
-// 	FILE *fp1 = fopen("temp.txt", "w");
-// 	for (int i=0; i<points.size(); i++)
-// 	{
-// 		fprintf(fp1, "%f %f %f\n", points[i].x, points[i].y, points[i].z);
-// 	}
-// 	fclose(fp1);
 	OutputParam(cameraMatrix, R, T, distCoeffs);
 	printf("time: %f\n", double(clock()-start)/1000);
 
@@ -183,7 +170,7 @@ void CCalibBall::run(char config_name[])
 // 	}
 // 
 
-	printf("time: %f\n", double(clock()-start)/1000);
+//	printf("time: %f\n", double(clock()-start)/1000);
 }
 
 int CCalibBall::run_once(const vector<string> &imagelist, vector<Point3d> &points, vector<vector<Point2d>> &imagePoints, vector<vector<int>> &visibility, vector<Mat> &R, vector<Mat> &T, vector<Mat> cameraMatrix)
@@ -205,12 +192,7 @@ int CCalibBall::run_once(const vector<string> &imagelist, vector<Point3d> &point
 		RANSAC(points3D_normed[i-1], points3D_normed[i], R[i], points, visibility[i-1], visibility[i]);
 	}
 	for (int i=0; i<cam_used_num; i++)
-	{
-		for (int j=0; j<visibility[i].size(); j++)
-			printf("%2d",visibility[i][j]);
-		printf("\n");
 		ProcessForSba(pointsImg[i], imagePoints[i], points, points3D_normed[i], visibility[i]);
-	}
 	ProjectToImg(imagelist, cameraMatrix, R, T, points, imagePoints, visibility);
  	delete [] first_label;
 	return int(points.size());
@@ -219,7 +201,6 @@ int CCalibBall::run_once(const vector<string> &imagelist, vector<Point3d> &point
 
 void CCalibBall::FindPoints(const vector<string> &imagelist, vector< Mat > &spheres, vector< vector< vector<Point2f> > > &pointsImg, vector< vector< vector<Point3d> > > &points3D, vector< vector <Point2f> > &MarkerPosition, int *first_label)
 {
-	bool flag = false;
 	vector< Vec3d > circles(cam_used_num);
 #pragma omp parallel for
 	for (int i=0; i<cam_used_num; i++)
@@ -231,12 +212,6 @@ void CCalibBall::FindPoints(const vector<string> &imagelist, vector< Mat > &sphe
 			exit(-1);
 		}
 		Mat ref = imread(filepath+imagelist[cam_list[i]]);
-		if (flag == false)
-		{
-			init_cx = ref.cols>>1;
-			init_cy = ref.rows>>1;
-			flag = true;
-		}
 		if (IsRotated[cam_list[i]]=='1')
 		{
 			flip(origin, origin, -1);
@@ -664,10 +639,11 @@ void CCalibBall::Points3DToMat(vector< vector<Point3d> > points3D, vector<Matx33
 
 void CCalibBall::ProcessForSba(vector<vector<Point2f>> pointImg_src, vector<Point2d> &pointImg_dst,  vector< Point3d> points, vector< Matx33d > points3D_normed, vector<int> &visibility)
 {
-	pointImg_dst.resize(NPoints);
-	vector<int> visibility_new(NPoints);
+	size_t nPoints = points.size();
+	pointImg_dst.resize(nPoints);
+	vector<int> visibility_new(nPoints);
 	Point2d p(0,0);
-	for (int i=0; i< NPoints; i++)
+	for (int i=0; i< nPoints; i++)
 	{
 		visibility_new[i] = 0;
 		pointImg_dst[i] = p;
@@ -697,7 +673,7 @@ void CCalibBall::ProcessForSba(vector<vector<Point2f>> pointImg_src, vector<Poin
 		{
 			double min_error = 1e6;
 			int idx = 0;
-			for (int j=0; j<NPoints; j+=2)
+			for (int j=0; j<nPoints; j+=2)
 			{
 				if (visibility_new[j]==0)
 				{
@@ -743,6 +719,7 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 	double error = 0;
 	double mean_radii = 0;
 	int nvis = 0;
+	size_t nPoints = points.size();
 	for (int i=0; i<cam_used_num; i++)
 	{
 #ifdef IS_OUTPUT
@@ -755,7 +732,7 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 #endif
 		Mat P1 = cameraMatrix[i]*R[i];
 		Mat P2 = cameraMatrix[i]*T[i];
-		for (int j=0; j<NPoints; j++)
+		for (int j=0; j<nPoints; j++)
 		{
 			if (visibility[i][j] == 1)
 			{
@@ -767,6 +744,7 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 				circle(ref, Point(imagePoints[i][j]), 5, Scalar(255,0,0), CV_FILLED);
 #endif
 				error += norm(center-imagePoints[i][j]);
+				
 				nvis ++;
 			}
 		}
@@ -775,27 +753,25 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 #endif
 	}
 	printf("mean square error: %f of %d projections\n", error/nvis, nvis);
-	for (int i=0; i<NPoints; i++)
-	{
+	for (int i=0; i<nPoints; i++)
 		mean_radii += norm(points[i]);
-//		printf("norm: %f\n", norm(points[i]));
-	}
-	printf("mean radii: %f of %d points\n", mean_radii/NPoints, NPoints);
+	printf("mean radii: %f of %d points\n", mean_radii/nPoints, nPoints);
 }
 
 void CCalibBall::ScaleToWorld(vector< Point3d> &points, vector< Mat > &T)
 {
 	double mean_DF = 0;
-	for (int i=0; i<NPoints; i+=2)
+	size_t nPoints = points.size();
+	for (int i=0; i<nPoints; i+=2)
 	{
 		mean_DF += norm(points[i+1]-points[i]);
 	}
-	double scale = DF/(mean_DF/NPoints*2);
+	double scale = DF/(mean_DF/nPoints*2);
 	for (int i=0; i<cam_used_num; i++)
 	{
 		T[i] *= scale;
 	}
-	for (int i=0; i<NPoints; i++)
+	for (int i=0; i<nPoints; i++)
 	{
 		points[i] *= scale;
 	}

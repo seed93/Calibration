@@ -4,6 +4,8 @@
 Debug/
 Release/
 .svn/
+*.m
+*.txt
 
 # Compiled Object files
 *.slo
@@ -23,6 +25,8 @@ Release/
 *.tiff
 *.ply
 *.yml
+*.bmp
+*.psd
 
 # Compiled Dynamic libraries
 *.so
