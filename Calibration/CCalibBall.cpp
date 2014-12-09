@@ -1,6 +1,6 @@
 #include "CCalibBall.h"
 
-//#define IS_OUTPUT //是否输出投影结果
+#define IS_OUTPUT //是否输出投影结果
 //#define IS_OUTPUT2 //是否输出三维点
 //#define IS_OUTPUT_CIRCLE
 #define SCALE 2
@@ -35,7 +35,7 @@ CCalibBall::CCalibBall(char config_name[])
 	fp["filepath"]>>filepath;
 	fp["code"]>>code;
 	code_num = (int)code.length()-5;
-
+	fp["auto"]>>IsAuto;
 	fp["imagelist"]>>imagelist_vector;
 	fp["backgroundlist"]>>backgroundlist;
 
@@ -110,6 +110,7 @@ void CCalibBall::run(char config_name[])
 	vector<vector<Point2d>> imagePoints(cam_used_num);
 	vector<vector<int>> visibility(cam_used_num);
 	vector<Mat> R(cam_used_num), T(cam_used_num);
+	Mat T_base;
 	for (int iv=0; iv<imagelist_vector.size(); iv++)
 	{
 		vector<string> current_imagelist(cam_used_num);
@@ -127,8 +128,23 @@ void CCalibBall::run(char config_name[])
 				visibility[i].push_back(current_visibility[i][j]);
 			}
 		}
+		Point3d T_temp;
+		if (iv == 0)
+		{
+			T_base = T[0].clone();
+			T_temp.x = 0;
+			T_temp.y = 0;
+			T_temp.z = 0;
+		}
+		else
+		{
+			Mat T_new = T_base-T[0];
+			T_temp.x = T_new.at<double>(0,0);
+			T_temp.y = T_new.at<double>(1,0);
+			T_temp.z = T_new.at<double>(2,0);
+		}
 		for (int i=0; i<current_points.size(); i++)
-			points.push_back(current_points[i]);
+			points.push_back(current_points[i]+T_temp);
 	}
 	cvsba::Sba sba;
 	cvsba::Sba::Params params ;
@@ -303,26 +319,39 @@ void CCalibBall::FindCorners(Mat image, vector< vector<Point2f> > &pointsImg, in
 	Mat image_back = image_small.clone();
 	cvtColor(image_small, image_gray, CV_BGR2GRAY);
 	cvtColor(image_small, image_small, CV_BGR2HSV);
-// 	char fname[100];
-// 	sprintf(fname, "out//%d_mask.jpg", idx);		//liuxiaoyang
-// 	Mat mask = imread(fname,false);					//liuxiaoyang
+	Mat mask;
+	if (IsAuto)
+	{
+		mask = image_gray != 0;
+		vector<Mat> hsv(image_small.channels());
+		split(image_small, hsv);
+		Mat gray = hsv[0];								//liuxiaoyang
 
- 	Mat mask = image_gray != 0;
- 	vector<Mat> hsv(image_small.channels());
- 	split(image_small, hsv);
- 	Mat gray = hsv[0];								//liuxiaoyang
-	
- 	element = getStructuringElement( MORPH_ELLIPSE, Size(5, 5));
-	
- 	GaussianBlur( gray, gray, Size(5, 5), 4, 4);
- 	morphologyEx(gray, gray, MORPH_OPEN, element, Point(-1,-1), 2);
- 	AutoThres(gray, mask);
- 	erode(mask, mask, element);
+		element = getStructuringElement( MORPH_ELLIPSE, Size(5, 5));
+
+		GaussianBlur( gray, gray, Size(5, 5), 4, 4);
+		morphologyEx(gray, gray, MORPH_OPEN, element, Point(-1,-1), 2);
+		AutoThres(gray, mask);
+		erode(mask, mask, element);
+	}
+	else
+	{
+		char fname[100];
+		sprintf(fname, "out//%d_mask.jpg", idx);		//liuxiaoyang
+		mask = imread(fname,false);					//liuxiaoyang
+		if (mask.rows == 0)
+		{
+			printf("unable to read image %s\n", fname);
+			exit(-1) ;
+		}
+	}
+
+ 	
 	
 // 	element = getStructuringElement( MORPH_ELLIPSE, Size(10, 10));
 // 	morphologyEx(mask, mask, MORPH_OPEN, element, Point(-1,-1), 2);
-//	medianBlur(image_gray,image_gray,3);
-//	medianBlur(image_gray,image_gray,3);
+// 	medianBlur(image_gray,image_gray,3);
+// 	medianBlur(image_gray,image_gray,3);
 	vector<Point2f> corners;
 	goodFeaturesToTrack(image_gray, corners, 100, 0.1, 60/SCALE, mask, 5);
 	Mat labelImg;
@@ -389,8 +418,11 @@ void CCalibBall::FindCorners(Mat image, vector< vector<Point2f> > &pointsImg, in
 	char filename[512];
 	sprintf(filename, "out//%d.jpg", idx);
 	imwrite(filename, I);
-	sprintf(filename, "out//%d_mask.jpg", idx);
-	imwrite(filename, mask1);
+	if (IsAuto)
+	{
+		sprintf(filename, "out//%d_mask.jpg", idx);
+		imwrite(filename, mask1);
+	}
 #endif
 }
 
@@ -800,7 +832,7 @@ void CCalibBall::KinectMarker(Mat BigMarker, Mat mask, vector< Point2f > &final_
 		}
 	}
 	vector<Point2f> line_(2);
-	double threshold = 35/SCALE;
+	double threshold = 35./SCALE;
 	if (RansacLine(final_corners, line_, threshold)==false)
 	{
 		printf("not enough points\n");

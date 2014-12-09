@@ -64,6 +64,7 @@ public:
 	vector<double> focal_length;		//≥ı ºΩπæ‡
 	double init_cx, init_cy;
 	string IsRotated;
+	int IsAuto;
 
 	CCalibBall(char config_name[]);
 	~CCalibBall();
