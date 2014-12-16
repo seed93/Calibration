@@ -333,6 +333,9 @@ void CCalibBall::FindCorners(Mat image, vector< vector<Point2f> > &pointsImg, in
 		morphologyEx(gray, gray, MORPH_OPEN, element, Point(-1,-1), 2);
 		AutoThres(gray, mask);
 		erode(mask, mask, element);
+		fillEdgeImage(mask, mask);
+		element = getStructuringElement( MORPH_ELLIPSE, Size(10, 10));
+		erode(mask, mask, element);
 	}
 	else
 	{
@@ -1224,6 +1227,17 @@ void CCalibBall::MapCoordinate(vector< Mat > P, vector< vector <Point2f> > Marke
 	{
 		AllPosition[(start_idx+i)%code_num] = u*cos(i*theta) + v*sin(i*theta) + center;
 	}
+}
+
+void fillEdgeImage(Mat edgesIn, Mat& filledEdgesOut)
+{
+	Mat edgesNeg = edgesIn.clone();
+
+	floodFill(edgesNeg, Point(0,0), CV_RGB(255,255,255));
+	bitwise_not(edgesNeg, edgesNeg);
+	filledEdgesOut = (edgesNeg | edgesIn);
+
+	return;
 }
 
 CCalibBall::~CCalibBall()

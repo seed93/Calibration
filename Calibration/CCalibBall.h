@@ -86,8 +86,9 @@ private:
 	bool RansacLine(vector<Point2f> src, vector<Point2f> &dst, double threshold);
 	void FetchKinect(int idx, vector<Point3f> AllPosition, FileStorage fs);
 	void MapCoordinate(vector< Mat > P, vector< vector <Point2f> > MarkerPosition, int *first_label, vector< Point3f > &AllPosition);
+	
 };
-
+void fillEdgeImage(Mat edgesIn, Mat& filledEdgesOut);
 void DetectCircle(Mat image, Vec3d &circle_, double minCircleRadius, double maxCircleRadius);
 void MaxEntropy(Mat img, Mat &dst);
 void AutoThres(Mat src, Mat &dst);
