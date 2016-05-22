@@ -1,8 +1,7 @@
 #common files
-*.jpg
 *.svn-base
-Debug/
-Release/
+#Debug/
+#Release/
 .svn/
 *.m
 *.txt
@@ -20,11 +19,11 @@ Release/
 *.sdf
 
 # image files
-*.jpg
+#*.jpg
 *.png
 *.tiff
 *.ply
-*.yml
+#*.yml
 *.bmp
 *.psd
 

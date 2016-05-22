@@ -38,11 +38,12 @@ using namespace std;
 
 struct Kinect
 {
-	int sn;
+	string img_name;
 	Mat DepthCameraIntrinsic;
 	Mat ColorCameraIntrinsic;
 	Mat ColorCameraExtrinsic;
 	Mat R1t_times_R;
+	Kinect(string name){img_name = name;}
 };
 class CCalibBall
 {
@@ -90,7 +91,7 @@ private:
 };
 void fillEdgeImage(Mat edgesIn, Mat& filledEdgesOut);
 void DetectCircle(Mat image, Vec3d &circle_, double minCircleRadius, double maxCircleRadius);
-void MaxEntropy(Mat img, Mat &dst);
 void AutoThres(Mat src, Mat &dst);
+void imfillholes(Mat src, Mat &dst);
 
 #endif

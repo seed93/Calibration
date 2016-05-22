@@ -1,8 +1,8 @@
 #include "CCalibBall.h"
 
 #define IS_OUTPUT //是否输出投影结果
-//#define IS_OUTPUT2 //是否输出三维点
-//#define IS_OUTPUT_CIRCLE
+#define IS_OUTPUT_CIRCLE
+#define IS_PROJ
 #define SCALE 2
 #define CODE_LEN 5
 #define MAX_COUNT 1000
@@ -39,15 +39,11 @@ CCalibBall::CCalibBall(char config_name[])
 	fp["imagelist"]>>imagelist_vector;
 	fp["backgroundlist"]>>backgroundlist;
 
-	FileNodeIterator sn = fp["kinect_sn"].begin();
-	Kinect temp_kinect;
-	for (;sn!=fp["kinect_sn"].end(); sn++)
-	{
-		temp_kinect.sn = (int)*sn;
-		kinect.push_back(temp_kinect);
-	}
+	FileNodeIterator sn = fp["kinectlist"].begin();
+	for (;sn!=fp["kinectlist"].end(); sn++)
+		kinect.push_back(Kinect(*sn));
 	kinect_num = (int)kinect.size();
-
+/*
 	string line;
 	fp["kinect_info"]>>line;
 	FileStorage fs(line, FileStorage::READ);
@@ -59,25 +55,20 @@ CCalibBall::CCalibBall(char config_name[])
 	for (int i=0; i<kinect_num; i++)
 	{
 		char pp[MAX_COUNT];
-		sprintf(pp, "ColorCameraExtrinsic-%d", kinect[i].sn);
+		sprintf(pp, "ColorCameraExtrinsic-%d", i);
 		fs[pp]>>kinect[i].ColorCameraExtrinsic;
-		sprintf(pp, "ColorCameraIntrinsic-%d", kinect[i].sn);
+		sprintf(pp, "ColorCameraIntrinsic-%d", i);
 		fs[pp]>>kinect[i].ColorCameraIntrinsic;
-		sprintf(pp, "DepthCameraIntrinsic-%d", kinect[i].sn);
+		sprintf(pp, "DepthCameraIntrinsic-%d", i);
 		fs[pp]>>kinect[i].DepthCameraIntrinsic;	
 	}
 	fp["kinect_calib_name"]>>kinect_calib_name;
 	fp["camera_calib_name"]>>camera_calib_name;
-
+*/
 	fp["isrotated"]>>IsRotated;
-	fp["camPair"]>>line;
-	cam_used_num = int(line.length());
-	cam_list.resize(cam_used_num);
-	for (int i=0; i<cam_used_num; i++)
-	{
-		cam_list[i] = line[i]-'0';
-	}
-	
+	fp["camPair"]>>cam_list;
+	cam_used_num = (int)cam_list.size();
+
 	fp["radii"]>>radii;
 	fp["DF"]>>DF;
 	fp["init_cx"]>>init_cx;
@@ -111,9 +102,10 @@ void CCalibBall::run(char config_name[])
 	vector<vector<int>> visibility(cam_used_num);
 	vector<Mat> R(cam_used_num), T(cam_used_num);
 	Mat T_base;
+	vector<string> current_imagelist(cam_used_num);
 	for (int iv=0; iv<imagelist_vector.size(); iv++)
 	{
-		vector<string> current_imagelist(cam_used_num);
+		current_imagelist.clear();
 		fp[imagelist_vector[iv]]>>current_imagelist;
 		vector<Point3d> current_points;
 		vector<vector<Point2d>> current_imagePoints(cam_used_num);
@@ -157,36 +149,37 @@ void CCalibBall::run(char config_name[])
 	sba.setParams(params);
 	sba.run(points, imagePoints, visibility, cameraMatrix, R, T, distCoeffs);
 	cout<<"Optimization. Initial error="<<sba.getInitialReprjError()<<" and Final error="<<sba.getFinalReprjError()<<std::endl;
+	ProjectToImg(current_imagelist, cameraMatrix, R, T, points, imagePoints, visibility);
 	ScaleToWorld(points,T);
 	OutputParam(cameraMatrix, R, T, distCoeffs);
 	printf("time: %f\n", double(clock()-start)/1000);
 
-	
-// 	vector< Mat > P(cam_used_num);
-// 	for (int i=0; i<cam_used_num; i++)
-// 	{
-// 		P[i] = Mat(3,4,CV_64FC1);
-// 		R[i].copyTo(P[i].colRange(0,3));
-// 		T[i].copyTo(P[i].col(3));
-// 		P[i] = cameraMatrix[i]*P[i];
-// 	}
-// 	vector< Point3f > AllPosition;
-// 	MapCoordinate(P, MarkerPosition, first_label, AllPosition);
-// 	FILE *fp = fopen("position.txt", "w");
-// 	for (int i=0; i<AllPosition.size(); i++)
-// 	{
-// 		fprintf(fp, "%f %f %f\n", AllPosition[i].x, AllPosition[i].y, AllPosition[i].z);
-// 	}
-// 	fclose(fp);
-// 
-// 	FileStorage fs(kinect_calib_name, FileStorage::WRITE);
-// 	for (int i=0; i<kinect_num; i++)
-// 	{
-// 		FetchKinect(i, AllPosition, fs);
-// 	}
-// 
 
-//	printf("time: %f\n", double(clock()-start)/1000);
+	// 	vector< Mat > P(cam_used_num);
+	// 	for (int i=0; i<cam_used_num; i++)
+	// 	{
+	// 		P[i] = Mat(3,4,CV_64FC1);
+	// 		R[i].copyTo(P[i].colRange(0,3));
+	// 		T[i].copyTo(P[i].col(3));
+	// 		P[i] = cameraMatrix[i]*P[i];
+	// 	}
+	// 	vector< Point3f > AllPosition;
+	// 	MapCoordinate(P, MarkerPosition, first_label, AllPosition);
+	// 	FILE *fp = fopen("position.txt", "w");
+	// 	for (int i=0; i<AllPosition.size(); i++)
+	// 	{
+	// 		fprintf(fp, "%f %f %f\n", AllPosition[i].x, AllPosition[i].y, AllPosition[i].z);
+	// 	}
+	// 	fclose(fp);
+	// 
+	// 	FileStorage fs(kinect_calib_name, FileStorage::WRITE);
+	// 	for (int i=0; i<kinect_num; i++)
+	// 	{
+	// 		FetchKinect(i, AllPosition, fs);
+	// 	}
+	// 
+
+	//	printf("time: %f\n", double(clock()-start)/1000);
 }
 
 int CCalibBall::run_once(const vector<string> &imagelist, vector<Point3d> &points, vector<vector<Point2d>> &imagePoints, vector<vector<int>> &visibility, vector<Mat> &R, vector<Mat> &T, vector<Mat> cameraMatrix)
@@ -209,8 +202,8 @@ int CCalibBall::run_once(const vector<string> &imagelist, vector<Point3d> &point
 	}
 	for (int i=0; i<cam_used_num; i++)
 		ProcessForSba(pointsImg[i], imagePoints[i], points, points3D_normed[i], visibility[i]);
-	ProjectToImg(imagelist, cameraMatrix, R, T, points, imagePoints, visibility);
- 	delete [] first_label;
+	//ProjectToImg(imagelist, cameraMatrix, R, T, points, imagePoints, visibility);
+	delete [] first_label;
 	return int(points.size());
 }
 
@@ -234,10 +227,10 @@ void CCalibBall::FindPoints(const vector<string> &imagelist, vector< Mat > &sphe
 			flip(ref, ref, -1);
 		}
 		Mat BigMarker, mask;
-// 		imwrite("background.jpg", origin);
-// 		imwrite("ref.jpg",ref);
+		// 		imwrite("background.jpg", origin);
+		// 		imwrite("ref.jpg",ref);
 		FindBigCircle(origin, ref, BigMarker, mask, circles[i], i);
-//		KinectMarker(BigMarker, mask, MarkerPosition[i], first_label[i], i);
+		//		KinectMarker(BigMarker, mask, MarkerPosition[i], first_label[i], i);
 		FindCorners(ref, pointsImg[i], i);
 		Cal3D(circles[i], spheres[i], pointsImg[i], points3D[i], focal_length[cam_list[i]]);
 	}
@@ -245,12 +238,12 @@ void CCalibBall::FindPoints(const vector<string> &imagelist, vector< Mat > &sphe
 
 void CCalibBall::FindBigCircle(Mat background, Mat &ref, Mat &BigMarker, Mat &mask_dst, Vec3d &circle_, int idx)
 {
-	int minR=700;
-	int maxR=1200;
+	int minR=1000;//700
+	int maxR=1500;//1200
 	Mat gray;
 	absdiff(background,ref,gray);
 	cvtColor(gray, gray, CV_BGR2GRAY);
-//	medianBlur(gray,gray,3);
+	//	medianBlur(gray,gray,3);
 	GaussianBlur( gray, gray, Size(25, 25), 2, 2);
 	gray = gray > 10;
 	Mat element = getStructuringElement( MORPH_ELLIPSE, Size(20, 20));
@@ -271,12 +264,15 @@ void CCalibBall::FindBigCircle(Mat background, Mat &ref, Mat &BigMarker, Mat &ma
 	gray.setTo(0);
 	drawContours( gray, contours, max_ID, Scalar(255) );
 	DetectCircle(gray, circle_, minR, maxR);
+	if(cvRound(circle_[2]) <= 0){
+		printf("circle not detected in %d\n", idx);
+		exit(-1);
+	}
 	Point2i bestCircleCenter(cvRound(circle_[0]), cvRound(circle_[1]));	
 	Mat mask(ref.size(), CV_8UC1, Scalar(0));
 	circle(mask, bestCircleCenter, cvRound(circle_[2])-120, Scalar(255), CV_FILLED);
 	Mat dst;
 	ref.copyTo(dst, mask);
-
 	mask.setTo(0);
 	drawContours( mask, contours, max_ID, Scalar(255), CV_FILLED );
 	circle(mask, bestCircleCenter, cvRound(circle_[2]), Scalar(0), CV_FILLED);
@@ -296,7 +292,7 @@ void CCalibBall::FindBigCircle(Mat background, Mat &ref, Mat &BigMarker, Mat &ma
 	}
 	mask.setTo(0);
 	drawContours( mask, contours, max_ID, Scalar(255), CV_FILLED );
- 	ref.copyTo(BigMarker, mask);
+	ref.copyTo(BigMarker, mask);
 	cvtColor(BigMarker, BigMarker, CV_BGR2GRAY);
 	mask_dst = mask;
 #ifdef IS_OUTPUT_CIRCLE
@@ -318,24 +314,23 @@ void CCalibBall::FindCorners(Mat image, vector< vector<Point2f> > &pointsImg, in
 	resize(image, image_small, Size(), 1.0/SCALE, 1.0/SCALE);
 	Mat image_back = image_small.clone();
 	cvtColor(image_small, image_gray, CV_BGR2GRAY);
-	cvtColor(image_small, image_small, CV_BGR2HSV);
 	Mat mask;
 	if (IsAuto)
 	{
 		mask = image_gray != 0;
-		vector<Mat> hsv(image_small.channels());
-		split(image_small, hsv);
-		Mat gray = hsv[0];								//liuxiaoyang
-
-		element = getStructuringElement( MORPH_ELLIPSE, Size(5, 5));
-
-		GaussianBlur( gray, gray, Size(5, 5), 4, 4);
-		morphologyEx(gray, gray, MORPH_OPEN, element, Point(-1,-1), 2);
-		AutoThres(gray, mask);
-		erode(mask, mask, element);
-		fillEdgeImage(mask, mask);
+		vector<Mat> rgb(image_small.channels());
+		split(image_small, rgb);			
+		Mat I = 255 - rgb[1];
+		element = getStructuringElement( MORPH_ELLIPSE, Size(80, 80));
+		Mat background;
+		morphologyEx(I, background, MORPH_OPEN, element);
 		element = getStructuringElement( MORPH_ELLIPSE, Size(10, 10));
-		erode(mask, mask, element);
+		morphologyEx(I, I, MORPH_OPEN, element);
+		image_small = I - background;
+		AutoThres(image_small, mask);
+		imfillholes(mask, mask);
+		element = getStructuringElement( MORPH_ELLIPSE, Size(40, 40));
+		morphologyEx(mask, mask, MORPH_OPEN, element);
 	}
 	else
 	{
@@ -349,12 +344,10 @@ void CCalibBall::FindCorners(Mat image, vector< vector<Point2f> > &pointsImg, in
 		}
 	}
 
- 	
-	
-// 	element = getStructuringElement( MORPH_ELLIPSE, Size(10, 10));
-// 	morphologyEx(mask, mask, MORPH_OPEN, element, Point(-1,-1), 2);
-// 	medianBlur(image_gray,image_gray,3);
-// 	medianBlur(image_gray,image_gray,3);
+	// 	element = getStructuringElement( MORPH_ELLIPSE, Size(10, 10));
+	// 	morphologyEx(mask, mask, MORPH_OPEN, element, Point(-1,-1), 2);
+	// 	medianBlur(image_gray,image_gray,3);
+	// 	medianBlur(image_gray,image_gray,3);
 	vector<Point2f> corners;
 	goodFeaturesToTrack(image_gray, corners, 100, 0.1, 60/SCALE, mask, 5);
 	Mat labelImg;
@@ -537,7 +530,7 @@ void CCalibBall::RANSAC(vector< Matx33d > points3D_src, vector< Matx33d > &point
 				fit_l = l;
 			}
 		}
-//		printf("min error: %f\n", min_error);
+		//		printf("min error: %f\n", min_error);
 		if (min_error < threshold)
 		{
 			if (visibility_src[fit_l] == -1)//该点没有被添加过
@@ -694,7 +687,7 @@ void CCalibBall::ProcessForSba(vector<vector<Point2f>> pointImg_src, vector<Poin
 	}
 	for (int i=0; i<vis_size;  i++)
 	{
-//		printf("%d ",visibility[i]);
+		//		printf("%d ",visibility[i]);
 		if (visibility[i] != -1)
 		{
 			int idx = visibility[i]<<1;
@@ -757,13 +750,11 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 	size_t nPoints = points.size();
 	for (int i=0; i<cam_used_num; i++)
 	{
-#ifdef IS_OUTPUT
-		bool rotate90 = IsRotated[cam_list[i]];
+#ifdef IS_PROJ
+		bool rotate90 = IsRotated[cam_list[i]] == '0';
 		Mat ref = imread(filepath+imagelist[cam_list[i]]);
 		if (IsRotated[cam_list[i]]=='1')
-		{
 			flip(ref, ref, -1);
-		}
 #endif
 		Mat P1 = cameraMatrix[i]*R[i];
 		Mat P2 = cameraMatrix[i]*T[i];
@@ -774,16 +765,16 @@ void CCalibBall::ProjectToImg(const vector<string> &imagelist, vector< Mat > cam
 				Mat u = Mat(points[j]);
 				u = P1*u+P2;
 				Point2d center(u.at<double>(0,0)/u.at<double>(2,0), u.at<double>(1,0)/u.at<double>(2,0));
-#ifdef IS_OUTPUT
+#ifdef IS_PROJ
 				circle(ref, Point(center), 5, Scalar(0,255,0), CV_FILLED);
-				circle(ref, Point(imagePoints[i][j]), 5, Scalar(255,0,0), CV_FILLED);
+				circle(ref, Point(imagePoints[i][j]), 4, Scalar(255,0,0), CV_FILLED);
 #endif
 				error += norm(center-imagePoints[i][j]);
-				
+
 				nvis ++;
 			}
 		}
-#ifdef IS_OUTPUT
+#ifdef IS_PROJ
 		imwrite("projection//"+imagelist[cam_list[i]], ref);
 #endif
 	}
@@ -818,9 +809,9 @@ void CCalibBall::KinectMarker(Mat BigMarker, Mat mask, vector< Point2f > &final_
 	resize(BigMarker, image_gray, Size(), 1.0/SCALE, 1.0/SCALE);
 	resize(mask, mask, Size(), 1.0/SCALE, 1.0/SCALE);
 	vector<Point2f> corners;
-//	equalizeHist(image_gray, image_gray);
-//	for (int i=0; i<3; i++)
-//		medianBlur(image_gray, image_gray, 3);
+	//	equalizeHist(image_gray, image_gray);
+	//	for (int i=0; i<3; i++)
+	//		medianBlur(image_gray, image_gray, 3);
 	goodFeaturesToTrack(image_gray, corners, 50, 0.02, 110/SCALE, mask, 3);
 	TermCriteria criteria = TermCriteria( CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 40, 0.001 ) ;
 	cornerSubPix(image_gray, corners, Size(7,7), Size(-1,-1), criteria);
@@ -913,8 +904,8 @@ void CCalibBall::KinectMarker(Mat BigMarker, Mat mask, vector< Point2f > &final_
 	char filename[512];
 	sprintf(filename, "out//%d_kinect.jpg", idx);
 	imwrite(filename, BigMarker);
- 	sprintf(filename, "kinect//%d_kinect.jpg", idx);
- 	imwrite(filename, image_gray_bk);
+	sprintf(filename, "kinect//%d_kinect.jpg", idx);
+	imwrite(filename, image_gray_bk);
 #endif
 }
 
@@ -957,7 +948,7 @@ bool CCalibBall::RansacLine(vector<Point2f> src, vector<Point2f> &line, double t
 			}
 		}
 	}
-//	printf("inliers %d\n", max_inliers);
+	//	printf("inliers %d\n", max_inliers);
 	if (max_inliers == 0)
 		return false;
 	return true;
@@ -966,9 +957,9 @@ bool CCalibBall::RansacLine(vector<Point2f> src, vector<Point2f> &line, double t
 void CCalibBall::FetchKinect(int idx, vector<Point3f>	AllPosition, FileStorage fs)
 {
 	char filename[MAX_COUNT];
-	sprintf(filename, "%s_%d_color.jpg", filepath.c_str(), kinect[idx].sn);//这有问题@@@@
+	sprintf(filename, "%s\\%s", filepath.c_str(), kinect[idx].img_name);//这有问题@@@@
 	Mat origin = imread(filename);
-	sprintf(filename, "%s_%d_color.jpg", filepath.c_str(), kinect[idx].sn);
+	sprintf(filename, "%s\\%s", filepath.c_str(), kinect[idx].img_name);
 	Mat ref = imread(filename);
 	//cut circle
 	int minR=115;
@@ -1103,7 +1094,7 @@ void CCalibBall::FetchKinect(int idx, vector<Point3f>	AllPosition, FileStorage f
 	kinect[idx].ColorCameraExtrinsic.colRange(0,3).copyTo(temp_ex.colRange(0,3));
 	Mat(kinect[idx].ColorCameraExtrinsic.col(3)-t).copyTo(temp_ex.col(3));
 	kinect[idx].R1t_times_R = Mat(temp_ex.t()*r).clone();
-	string currentID = std::to_string((_Longlong)kinect[idx].sn);
+	string currentID = std::to_string((_Longlong)idx);
 	fs<<"DepthCameraIntrinsic-"+currentID<<"["
 		<<kinect[idx].DepthCameraIntrinsic.at<float>(0,0)
 		<<kinect[idx].DepthCameraIntrinsic.at<float>(1,1)
@@ -1191,9 +1182,9 @@ void CCalibBall::MapCoordinate(vector< Mat > P, vector< vector <Point2f> > Marke
 	Mat(-2*proj_points.col(1)+(2*plane_normal.at<float>(1,0)/plane_normal.at<float>(2,0))*proj_points.col(2)).copyTo(A.col(1));
 	A.col(2).setTo(1);
 	Mat b = -proj_points.col(0).mul(proj_points.col(0))
-			-proj_points.col(1).mul(proj_points.col(1))
-			-proj_points.col(2).mul(proj_points.col(2))
-			+ (2*constValue/plane_normal.at<float>(2,0))*proj_points.col(2);
+		-proj_points.col(1).mul(proj_points.col(1))
+		-proj_points.col(2).mul(proj_points.col(2))
+		+ (2*constValue/plane_normal.at<float>(2,0))*proj_points.col(2);
 	Mat dst;
 	solve(A, b, dst, DECOMP_SVD);
 	Point3f center;
@@ -1201,16 +1192,16 @@ void CCalibBall::MapCoordinate(vector< Mat > P, vector< vector <Point2f> > Marke
 	center.y = dst.at<float>(1,0);
 	center.z = ((float)constValue - plane_normal.at<float>(0,0)*dst.at<float>(0,0)-plane_normal.at<float>(1,0)*dst.at<float>(1,0))/plane_normal.at<float>(2,0);
 	double radii = sqrt(center.dot(center)-dst.at<float>(2,0));
-// 	Vec3f ref_point(Mat(proj_points.row(0)-Mat(center).t()).ptr<float>(0,0));
-// 	normalize(ref_point, ref_point);
-// 	Point3f u = Point3f(ref_point)*radii;
-// 	if (Mat(points_buffer.row(0).cross(points_buffer.row(1))).dot(plane_normal.t()) < 0)
-// 		plane_normal = -plane_normal;
-// 	Point3f v(Vec3f(plane_normal.cross(Mat(u))));
-// 	for (int i=0; i<code_num; i++)
-// 	{
-// 		AllPosition[(i+first_idx)%code_num] = u*cos(double(i)/code_num*2*PI) + v*sin(double(i)/code_num*2*PI) + center;
-// 	}
+	// 	Vec3f ref_point(Mat(proj_points.row(0)-Mat(center).t()).ptr<float>(0,0));
+	// 	normalize(ref_point, ref_point);
+	// 	Point3f u = Point3f(ref_point)*radii;
+	// 	if (Mat(points_buffer.row(0).cross(points_buffer.row(1))).dot(plane_normal.t()) < 0)
+	// 		plane_normal = -plane_normal;
+	// 	Point3f v(Vec3f(plane_normal.cross(Mat(u))));
+	// 	for (int i=0; i<code_num; i++)
+	// 	{
+	// 		AllPosition[(i+first_idx)%code_num] = u*cos(double(i)/code_num*2*PI) + v*sin(double(i)/code_num*2*PI) + center;
+	// 	}
 	for (int i=0; i<count; i++)
 	{
 		Vec3f ref_point(Mat(proj_points.row(i)-Mat(center).t()).ptr<float>(0));

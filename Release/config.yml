@@ -1,0 +1,61 @@
+%YAML:1.0
+filepath: "../data/pair1/"
+code: "0101111100110100100001"
+auto: 1
+imagelist:
+   - "imagelist-1"
+imagelist-1:
+   - "3_13293115_0.jpg"
+   - "3_13293116_0.jpg"
+   - "3_13502663_0.jpg"
+   - "3_13502667_0.jpg"
+   - "3_13502670_0.jpg"
+   - "3_13502673_0.jpg"
+   - "3_13502680_0.jpg"
+   - "3_13502683_0.jpg"
+   - "3_13502686_0.jpg"
+   - "3_13502693_0.jpg"
+backgroundlist:
+   - "4_13293115_0.jpg"
+   - "4_13293116_0.jpg"
+   - "4_13502663_0.jpg"
+   - "4_13502667_0.jpg"
+   - "4_13502670_0.jpg"
+   - "4_13502673_0.jpg"
+   - "4_13502680_0.jpg"
+   - "4_13502683_0.jpg"
+   - "4_13502686_0.jpg"
+   - "4_13502693_0.jpg"
+kinect_sn:
+   - "0_color.jpg"
+   - "1_color.jpg"
+kinect_info: “kinect_info.yml"
+kinect_calib_name: "kinect_calib.yml"
+camera_calib_name: "cam_calib.yml"
+isrotated: "1011110010"
+camPair:
+   - 1
+   - 4
+   - 9
+   - 3
+   - 6
+   - 8
+   - 2
+   - 5
+   - 7
+   - 0
+radii:200
+DF: 20
+init_cx: 1500
+init_cy: 2000
+initfc:
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
+   - 7500
